@@ -60,9 +60,10 @@ import numpy as np
 import nltk
 from nltk.stem import WordNetLemmatizer
 
-# Download required data
-nltk.download('punkt')
-nltk.download('wordnet')
+# Download required NLTK data (runs at startup on Render)
+nltk.download('punkt', quiet=True)
+nltk.download('punkt_tab', quiet=True)
+nltk.download('wordnet', quiet=True)
 
 lemmatizer = WordNetLemmatizer()
 
@@ -123,5 +124,5 @@ def chat():
     return jsonify({"response": bot_response})
 
 if __name__ == '__main__':
-    # Run the web server
-    app.run(debug=True, port=5000)
+    # Run the web server (debug=False for production)
+    app.run(debug=False, port=5000)

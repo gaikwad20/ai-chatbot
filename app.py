@@ -1,9 +1,18 @@
 from flask import Flask, render_template, request, jsonify
 import random
+import nltk
+from nltk.stem import WordNetLemmatizer
 
 app = Flask(__name__)
 
-# Basic NLP intent dictionary
+# Download required NLTK data at startup
+nltk.download('punkt', quiet=True)
+nltk.download('punkt_tab', quiet=True)
+nltk.download('wordnet', quiet=True)
+
+lemmatizer = WordNetLemmatizer()
+
+# Intent dictionary with keywords and responses
 intents = [
     {
         "keywords": ["hello", "hi", "hey", "greetings", "good morning", "good evening"],
@@ -31,77 +40,38 @@ intents = [
     }
 ]
 
-def ensure_nltk_data():
-    """Ensure NLTK required tokenizers are downloaded"""
-    try:
-        nltk.data.find('tokenizers/punkt')
-    except LookupError:
-        nltk.download('punkt', quiet=True)
-        
-    try:
-        nltk.data.find('tokenizers/punkt_tab')
-    except LookupError:
-        nltk.download('punkt_tab', quiet=True)
-
-# Try to initialize NLP processing safely
-HAS_NLTK = False
-try:
-    import nltk
-    ensure_nltk_data()
-    HAS_NLTK = True
-except ImportError:
-    print("Warning: NLTK module not found. Using basic fallback matching.")
-except Exception as e:
-    print(f"Warning: NLTK initialization failed. Using basic fallback matching. Error: {e}")
-
-from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.metrics.pairwise import cosine_similarity
-import numpy as np
-import nltk
-from nltk.stem import WordNetLemmatizer
-
-# Download required NLTK data (runs at startup on Render)
-nltk.download('punkt', quiet=True)
-nltk.download('punkt_tab', quiet=True)
-nltk.download('wordnet', quiet=True)
-
-lemmatizer = WordNetLemmatizer()
-
-# Prepare training data from intents
-all_keywords = []
-all_responses = []
-
-for intent in intents:
-    for keyword in intent["keywords"]:
-        all_keywords.append(keyword)
-        all_responses.append(intent["responses"])
-
 def preprocess(text):
+    """Tokenize and lemmatize text into a set of words."""
     tokens = nltk.word_tokenize(text.lower())
-    lemmas = [lemmatizer.lemmatize(word) for word in tokens]
-    return " ".join(lemmas)
+    return set(lemmatizer.lemmatize(word) for word in tokens if word.isalpha())
 
-# Preprocess keywords
-processed_keywords = [preprocess(k) for k in all_keywords]
-
-# Train vectorizer
-vectorizer = TfidfVectorizer()
-X = vectorizer.fit_transform(processed_keywords)
+def word_overlap_score(user_words, keyword_phrase):
+    """Score a keyword phrase against user input using word overlap (Jaccard-style)."""
+    keyword_words = preprocess(keyword_phrase)
+    if not keyword_words:
+        return 0.0
+    overlap = len(user_words & keyword_words)
+    return overlap / len(keyword_words)
 
 def nlp_process(user_message):
-    user_processed = preprocess(user_message)
-    user_vector = vectorizer.transform([user_processed])
+    """Find the best matching intent using word overlap scoring."""
+    user_words = preprocess(user_message)
 
-    # Calculate similarity
-    similarities = cosine_similarity(user_vector, X)
-    best_match_index = np.argmax(similarities)
+    best_score = 0.0
+    best_responses = None
 
-    # Confidence check (important!)
-    if similarities[0][best_match_index] < 0.3:
+    for intent in intents:
+        for keyword in intent["keywords"]:
+            score = word_overlap_score(user_words, keyword)
+            if score > best_score:
+                best_score = score
+                best_responses = intent["responses"]
+
+    # Confidence threshold
+    if best_score < 0.3:
         return "I'm not quite sure I understand. Can you try rephrasing?"
 
-    # Return random response from matched intent
-    return random.choice(all_responses[best_match_index])
+    return random.choice(best_responses)
 
 @app.route('/')
 def home():
@@ -112,17 +82,14 @@ def home():
 def chat():
     """Endpoint for handling chat messages"""
     data = request.get_json()
-    
+
     if not data or "message" not in data:
         return jsonify({"response": "No message provided. Please say something!"}), 400
-        
+
     user_message = data["message"]
-    
-    # Process the message and generate a bot response
     bot_response = nlp_process(user_message)
-    
+
     return jsonify({"response": bot_response})
 
 if __name__ == '__main__':
-    # Run the web server (debug=False for production)
     app.run(debug=False, port=5000)

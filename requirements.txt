@@ -2,3 +2,4 @@ Flask==3.0.3
 nltk==3.8.1
 scikit-learn>=1.5.0
 numpy>=1.26.0
+gunicorn==22.0.0

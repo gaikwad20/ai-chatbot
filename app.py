@@ -12,10 +12,10 @@ def home():
 def chat():
     """Endpoint for handling chat messages"""
     data = request.get_json()
-    
+
     if not data or "message" not in data:
         return jsonify({"response": "No message provided. Please say something!"}), 400
-        
+
     user_message = data["message"]
     
     # Process the message and generate a bot response using the NLPEngine
@@ -24,5 +24,4 @@ def chat():
     return jsonify({"response": bot_response})
 
 if __name__ == '__main__':
-    # Run the web server
-    app.run(debug=True, port=5000)
+    app.run(debug=False, port=5000)
